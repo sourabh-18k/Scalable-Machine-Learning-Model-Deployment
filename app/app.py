@@ -1,22 +1,13 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import joblib
-import os
+from flask import Flask
 
+app = Flask(__name__)
 
-# Correct path handling
-current_dir = os.path.dirname(os.path.abspath(__file__))  # Path of app.py
-parent_dir = os.path.dirname(current_dir)  # Go one level up, where models/ is
+@app.route('/')
+def hello():
+    return "<h1>Hello World</h1>"
 
-# Load models and scaler using the correct path
-rf_model = joblib.load(os.path.join(parent_dir, 'models', 'rf_model.pkl'))
-gb_model = joblib.load(os.path.join(parent_dir, 'models', 'gb_model.pkl'))
-scaler = joblib.load(os.path.join(parent_dir, 'models', 'scaler.pkl'))
-
-st.title("🚗Vehiclesale Price Predictor")
-
-st.markdown("Fill in the car details to get the predicted resale price.")
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=False)
 
 # Input form
 with st.form("prediction_form"):

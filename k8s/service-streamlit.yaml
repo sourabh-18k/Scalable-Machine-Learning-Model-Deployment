@@ -7,6 +7,7 @@ spec:
     app: streamlit-ui
   ports:
   - protocol: TCP
+    # Expose service on port 80 so ingress can route traffic to this service
     port: 80
     targetPort: 8501
   type: ClusterIP

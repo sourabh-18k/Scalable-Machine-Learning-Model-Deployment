@@ -15,4 +15,6 @@ spec:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 70
+        # Set a reasonable CPU utilization target (percentage). 50 is a common starting point.
+        averageUtilization: 50
+̥

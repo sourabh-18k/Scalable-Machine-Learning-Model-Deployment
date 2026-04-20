@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: streamlit
-        image: carprice:local
+        image: carprice-streamlit:local
         imagePullPolicy: Never
         ports:
         - containerPort: 8501

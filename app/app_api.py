@@ -4,6 +4,9 @@ import joblib
 import os
 import numpy as np
 import pandas as pd
+import time
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, REGISTRY
+from fastapi.responses import Response
 
 # load models
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -16,6 +19,36 @@ gb_model = joblib.load(gb_path)
 scaler = joblib.load(scaler_path)
 
 app = FastAPI(title="Car Resale Price Prediction API")
+
+# Prometheus metrics
+requests_total = Counter(
+    'carprice_api_requests_total',
+    'Total API requests',
+    ['method', 'endpoint', 'status']
+)
+
+request_duration = Histogram(
+    'carprice_api_request_duration_seconds',
+    'Request duration in seconds',
+    ['method', 'endpoint']
+)
+
+predictions_total = Counter(
+    'carprice_api_predictions_total',
+    'Total predictions made',
+    ['model_type', 'status']
+)
+
+prediction_duration = Histogram(
+    'carprice_api_prediction_duration_seconds',
+    'Prediction duration in seconds',
+    ['model_type']
+)
+
+predictions_in_progress = Gauge(
+    'carprice_api_predictions_in_progress',
+    'Predictions currently being processed'
+)
 
 class PredictRequest(BaseModel):
     
@@ -67,11 +100,43 @@ def preprocess(req: PredictRequest):
 def health():
     return {"status": "ok"}
 
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(REGISTRY), media_type="text/plain")
+
+
+@app.get("/")
+def root():
+    return {"message": "Car Price Prediction API — use /health or /predict"}
+
 @app.post("/predict")
 def predict(req: PredictRequest):
-    df = preprocess(req)
-    model = gb_model if req.model_choice == "Gradient Boosting" else rf_model
-    log_price = model.predict(df)[0]
-    predicted_price = float(np.expm1(log_price))
-    return {"model": req.model_choice, "predicted_price": predicted_price}
+    predictions_in_progress.inc()
+    start_time = time.time()
+    
+    try:
+        df = preprocess(req)
+        model = gb_model if req.model_choice == "Gradient Boosting" else rf_model
+        log_price = model.predict(df)[0]
+        predicted_price = float(np.expm1(log_price))
+        
+        # Record metrics
+        duration = time.time() - start_time
+        request_duration.labels(method='POST', endpoint='/predict').observe(duration)
+        requests_total.labels(method='POST', endpoint='/predict', status=200).inc()
+        prediction_duration.labels(model_type=req.model_choice).observe(duration)
+        predictions_total.labels(model_type=req.model_choice, status='success').inc()
+        
+        return {"model": req.model_choice, "predicted_price": predicted_price}
+    
+    except Exception as e:
+        duration = time.time() - start_time
+        request_duration.labels(method='POST', endpoint='/predict').observe(duration)
+        requests_total.labels(method='POST', endpoint='/predict', status=500).inc()
+        predictions_total.labels(model_type="unknown", status='error').inc()
+        raise
+    
+    finally:
+        predictions_in_progress.dec()
 
